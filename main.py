@@ -7,7 +7,7 @@ Original file is located at
     https://colab.research.google.com/drive/1hPOZykFGp5yYEevhdY_oFm2ek4j2589-
 """
 
-!pip install python-telegram-bot==20.3 --quiet
+
 
 from telegram import Update, ReplyKeyboardRemove
 from telegram.ext import (
