@@ -1,107 +1,102 @@
-# main.py
-
-from telegram import Update, ReplyKeyboardRemove
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler, filters,
-    ContextTypes, ConversationHandler, Application
-)
+import os
 import asyncio
+from aiohttp import web
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler,
+    filters, ContextTypes
+)
 
-# Bot token and admin chat ID
+# --- Bot credentials ---
 BOT_TOKEN = "8032316187:AAE3J2IrFvQkI-vIgxtB2WoRadDozfx845g"
-admin_chat_id = 1136279013
+ADMIN_CHAT_ID = "1136279013"  # Replace with your real Telegram ID
 
-# Conversation steps
-ITEM, QUANTITY, NAME, PHONE = range(4)
+# --- Bot command handlers ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("""👋 Welcome to AV Fruits & Veggies Bot! 🍅🍍🧅
-
-🚛 Fresh farm veggies & fruits at your doorstep.
-
-🧾 Available Commands:
-👉 /order – Place your order
-👉 /price – Today's price list
-👉 /location – Truck location today
-👉 /contact – Call or WhatsApp us
-
-Start now with /order""")
-
-async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("""📊 Today's Price List:
-🍅 Tomato: ₹22/kg
-🍍 Pineapple: ₹70/piece
-🧅 Onion: ₹35/kg
-🍈 Papaya: ₹50/kg""")
-
-async def location(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📍 Our truck is located at Anna Nagar, near Kora Food Street.")
-
-async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📞 Contact us on WhatsApp: 9360409987")
-
-async def order(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🛒 What item(s) would you like to order?")
-    return ITEM
-
-async def get_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['items'] = update.message.text
-    await update.message.reply_text("📦 How much quantity do you want?")
-    return QUANTITY
-
-async def get_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['quantity'] = update.message.text
-    await update.message.reply_text("👤 Please enter your name:")
-    return NAME
-
-async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['name'] = update.message.text
-    await update.message.reply_text("📱 Please enter your mobile number:")
-    return PHONE
-
-async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['phone'] = update.message.text
-    await update.message.reply_text("✅ Order received! Thank you!")
-
-    message = f"""🧾 New Order Received!
-Item: {context.user_data['items']}
-Quantity: {context.user_data['quantity']}
-Customer Name: {context.user_data['name']}
-Phone Number: {context.user_data['phone']}"""
-
-    await context.bot.send_message(chat_id=admin_chat_id, text=message)
-    return ConversationHandler.END
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❌ Order cancelled.", reply_markup=ReplyKeyboardRemove())
-    return ConversationHandler.END
-
-async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("order", order)],
-        states={
-            ITEM: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_item)],
-            QUANTITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_quantity)],
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-            PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
+    await update.message.reply_text(
+        "🍎 Welcome to *AV Fruits & Veggies*!\n\n"
+        "You can:\n"
+        "• Type /menu to see our price list 📋\n"
+        "• Type /location to know our truck location 📍\n"
+        "• Type /contact to get in touch 📞\n"
+        "• Or *just send your order* (name, phone, items, quantity)\n\n"
+        "_We’ll confirm your order shortly!_",
+        parse_mode="Markdown"
     )
 
+async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📋 *Today's Price List:*\n"
+        "🍅 Tomato – ₹20/kg\n"
+        "🧅 Onion – ₹25/kg\n"
+        "🍍 Pineapple – ₹40/pc\n"
+        "🍈 Papaya – ₹30/kg",
+        parse_mode="Markdown"
+    )
+
+async def location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🚚 *Today's Truck Location:*\nNear Central Market, Town Square.",
+        parse_mode="Markdown"
+    )
+
+async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📞 *Contact Us:*\nPhone: 9876543210\nTelegram: @avfruits_bot",
+        parse_mode="Markdown"
+    )
+
+async def forward_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    order_text = update.message.text
+    user = update.message.from_user
+    name = user.first_name or "Unknown"
+    username = f"@{user.username}" if user.username else "(no username)"
+
+    # Format message to admin
+    message = (
+        f"📦 *New Order Received!*\n"
+        f"👤 From: {name} {username}\n"
+        f"📝 Order:\n{order_text}"
+    )
+
+    # Send to admin
+    await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=message, parse_mode="Markdown")
+    await update.message.reply_text("✅ *Order received!* We will contact you soon.", parse_mode="Markdown")
+
+# --- Background HTTP server (for Render) ---
+
+async def handle_root(request):
+    return web.Response(text="✅ Bot is running.")
+
+async def main():
+    # Start Telegram bot
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Register handlers
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("price", price))
+    app.add_handler(CommandHandler("menu", menu))
     app.add_handler(CommandHandler("location", location))
     app.add_handler(CommandHandler("contact", contact))
-    app.add_handler(conv_handler)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_order))
 
-    print("✅ Bot is running...")
+    # Start web server (keep-alive for Render)
+    web_app = web.Application()
+    web_app.router.add_get("/", handle_root)
+    runner = web.AppRunner(web_app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", int(os.environ.get("PORT", 8080)))
+    await site.start()
+
+    print("✅ Web server started. Starting bot polling...")
+    
+    # Start bot polling (non-blocking)
     await app.initialize()
     await app.start()
     await app.updater.start_polling()
-    await app.updater.idle()  # Keep the bot alive
+    
+    # Run forever
+    await asyncio.Event().wait()
 
-# Required for Render (entry point)
 if __name__ == "__main__":
     asyncio.run(main())
